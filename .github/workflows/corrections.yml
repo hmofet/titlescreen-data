@@ -1,0 +1,41 @@
+name: Corrections
+
+# check: every correction issue, as it is opened or edited (tools/corrections/review.py check)
+# review: once a week, every correction: duplicates rolled up, applied ones closed, the rest scored, the digest refreshed
+on:
+  issues:
+    types: [opened, edited, reopened]
+  schedule:
+    - cron: '17 11 * * 1'      # Mondays, 07:17 Toronto time in summer, 06:17 in winter
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: corrections-check-${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/corrections/review.py check "$ISSUE"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  review:
+    if: github.event_name != 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: corrections-review
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest tools/corrections/test_review.py
+      - run: python3 tools/corrections/review.py review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

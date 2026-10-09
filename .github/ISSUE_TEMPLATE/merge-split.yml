@@ -1,0 +1,33 @@
+name: Two games joined, or one game split
+description: Two different games share one page, or one game is shown as two. A person reviews these.
+title: "Join/split: "
+labels: ["merge-split"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is wrong
+      options:
+        - "Two different games are joined as one"
+        - "One game is shown as two"
+    validations:
+      required: true
+  - type: textarea
+    id: releases
+    attributes:
+      label: Releases
+      description: The release ids from titlescreen.org (e.g. `rve3nkew`), one per line.
+    validations:
+      required: true
+  - type: input
+    id: evidence_url
+    attributes:
+      label: Link to the evidence
+    validations:
+      required: true
+  - type: textarea
+    id: evidence_detail
+    attributes:
+      label: What the evidence shows
+    validations:
+      required: true

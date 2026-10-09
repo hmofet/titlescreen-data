@@ -1,0 +1,76 @@
+name: Correct a fact
+description: A fact about a release is wrong and you can show where the right value is written. Start from the release's page on titlescreen.org ("Suggest a correction"), which fills this in.
+title: "Correction: "
+labels: ["correction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Start from the release's page on [titlescreen.org](https://titlescreen.org)** and use *Suggest a correction*: it fills in the fields below. A bot checks every field when the issue is opened or edited and closes it if a field does not check out; editing the issue to fix it reopens it. Corrections are reviewed against the evidence before a build applies them. How they are judged: [titlescreen.org/corrections](https://titlescreen.org/corrections).
+
+        Only these facts can be corrected: `date`, `publisher`, `developer`, `genre`, `players`.
+  - type: input
+    id: release
+    attributes:
+      label: Release
+      description: The release id from titlescreen.org, e.g. `rve3nkew`.
+    validations:
+      required: true
+  - type: input
+    id: fact
+    attributes:
+      label: Fact
+      description: One of `date`, `publisher`, `developer`, `genre`, `players`.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Published now
+      description: Filled in by the site. The bot reads the live value itself, so a change here changes nothing.
+    validations:
+      required: false
+  - type: input
+    id: proposed
+    attributes:
+      label: Proposed value
+      description: "Filled in by the site. A date as `YYYY`, `YYYY-MM` or `YYYY-MM-DD`; a company as `Name [c1234567]` (or `new company: Name`); a genre as `Name [genre/id]`; players as a number."
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence_kind
+    attributes:
+      label: Kind of evidence
+      description: The strongest evidence you have. Another database or wiki is weak evidence; those are often where the wrong value came from.
+      options:
+        - "The game itself: cartridge, disc, box, manual or title screen (photo or scan)"
+        - "The publisher's or developer's own record: site, press release, catalogue"
+        - "A ratings board or registry: ESRB, PEGI, CERO, USK, ACB, a copyright office"
+        - "A magazine or newspaper of the time (scan, with the page)"
+        - "A reference book (give the page)"
+        - "Another database or wiki"
+    validations:
+      required: true
+  - type: input
+    id: evidence_url
+    attributes:
+      label: Link to the evidence
+      description: A photo or scan, a ratings board entry, a magazine scan, the publisher's page. Not a Title Screen page.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence_detail
+    attributes:
+      label: What the evidence shows
+      description: What it says and where on it, in a sentence or two.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Checks
+      options:
+        - label: I looked at the evidence myself, and it is about this release (this platform and market), not another version or region.
+          required: true
+        - label: I agree that this correction is published under CC BY 4.0 with the rest of the data.
+          required: true

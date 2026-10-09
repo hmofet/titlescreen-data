@@ -45,7 +45,12 @@ terms do not pass to it.
 
 ## Corrections
 
-A wrong fact: open an issue here naming the release id (the `r...` code on its
-page) and the right value, with where it can be checked. Accepted corrections
-become overrides the next build applies, each with its reason; the statements
-they overrule stay in the evidence.
+A wrong fact: find the release on [titlescreen.org](https://titlescreen.org)
+and press **Suggest a correction**. It opens an issue here, filled in, with the
+right value and the evidence for it. A bot checks each issue as it is opened,
+rolls up duplicates and scores the rest once a week, and keeps a digest issue
+listing them; a person checks the evidence and accepts or rejects each one.
+Accepted corrections become overrides the next build applies, each with its
+reason; the statements they overrule stay in the evidence. The rules:
+[titlescreen.org/corrections](https://titlescreen.org/corrections). The bot is
+`tools/corrections/review.py` (MIT).
