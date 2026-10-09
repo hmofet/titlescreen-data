@@ -93,7 +93,7 @@ class FakeGitHub(R.GitHub):
             it = self.items[int(parts[-1])]
             it.update({k: v for k, v in body.items() if k in ('state', 'body')})
         elif method == 'POST' and path.endswith('/issues'):
-            n = max(self.items) + 1
+            n = max(self.items, default=0) + 1
             self.items[n] = {'number': n, 'state': 'open', 'labels': [{'name': 'digest'}], 'body': body['body'], 'user': {'login': 'bot'}}
         return None
 
@@ -235,6 +235,46 @@ class Review(unittest.TestCase):
         gh = FakeGitHub([issue(1, state='closed', labels=('correction', 'rejected')), issue(2, author='bob')])
         R.review(gh, FakeData())
         self.assertIn('rejected before', gh.notes[2][R.MARK_ROLLUP])
+
+
+class Herald(unittest.TestCase):
+    def setUp(self):
+        self.sent = []
+        self.real = R.herald
+        R.herald = lambda topic, event, path='pub', method='POST': self.sent.append((topic, event) if path == 'pub' else ('deadman', event))
+        os.environ['HERALD_TOKEN'] = 'x'
+
+    def tearDown(self):
+        R.herald = self.real
+        os.environ.pop('HERALD_TOKEN', None)
+
+    def test_quiet_week_only_beats(self):
+        R.review(FakeGitHub([]), FakeData())
+        self.assertEqual([t for t, _ in self.sent], ['deadman', R.HERALD_BEAT])
+        self.assertEqual(self.sent[0][1]['expectEvery'], '7d')
+        self.assertEqual(self.sent[1][1]['priority'], 'low')
+
+    def test_waiting_corrections_notify(self):
+        gh = FakeGitHub([issue(1), issue(2, fact='players', proposed='4', author='bob', kind=DATABASE)])
+        R.review(gh, FakeData())
+        topic, ev = self.sent[-1]
+        self.assertEqual(topic, R.HERALD_TOPIC)
+        self.assertEqual(ev['title'], 'Title Screen: 2 corrections to review')
+        self.assertIn('1 likely accurate', ev['body'])
+        self.assertNotIn('dedupe', ev)
+        self.assertEqual(ev['ttl'], R.WEEK)
+        self.assertTrue(ev['actions'][0]['url'].startswith('https://github.com/'))
+
+    def test_accepted_waiting_for_a_build_notifies(self):
+        gh = FakeGitHub([issue(1)])
+        gh.items[1]['labels'].append({'name': 'accepted'})
+        R.review(gh, FakeData())
+        self.assertEqual(self.sent[-1][1]['title'], 'Title Screen: 1 accepted correction to build')
+
+    def test_no_token_sends_nothing(self):
+        del os.environ['HERALD_TOKEN']
+        R.review(FakeGitHub([issue(1)]), FakeData())
+        self.assertEqual(self.sent, [])
 
 
 if __name__ == '__main__':

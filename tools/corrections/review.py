@@ -7,12 +7,16 @@ Title Screen corrections: checks and reviews the correction issues on this repos
     review.py review [--dry-run]   every correction: roll duplicates up into the oldest report, close the ones
                                    a build has since applied, score the rest and refresh the digest issue
 
-The rules are written out for contributors at https://titlescreen.org/corrections (CORRECTIONS.md here).
+The rules are written out for contributors at https://titlescreen.org/corrections.
 A score ranks corrections for a person to check; it never applies one. Accepting a correction is a person
 adding the `accepted` label; the digest then carries its override, ready for the build.
 
-Standard library only. Environment: GITHUB_TOKEN, GITHUB_REPOSITORY (owner/name), and TS_API
-(default https://titlescreen.org/api/v1).
+A review ends by telling Herald (the maintainer's notification hub): a quiet heartbeat every run, which a
+dead-man timer there watches (GitHub turns scheduled workflows off after 60 days without a commit), and a
+notification only when something waits on a person.
+
+Standard library only. Environment: GITHUB_TOKEN, GITHUB_REPOSITORY (owner/name), TS_API
+(default https://titlescreen.org/api/v1), and optionally HERALD_TOKEN and HERALD_URL.
 """
 import datetime as dt
 import json
@@ -624,12 +628,66 @@ def review(gh: GitHub, data: Data) -> str:
                   remove=['needs-review'] + [b for b in BANDS if b != g.band] + ([] if g.conflicts else ['conflicting']))
     body = digest(live, closed_now, version, data, gh.repo)
     old = next((i for i in gh.issues('digest', 'open')), None)
+    url = f'https://github.com/{gh.repo}/issues?q=label%3Adigest'
     if old:
+        url = old.get('html_url') or url
         if (old.get('body') or '').split('\n', 2)[2:] != body.split('\n', 2)[2:]:
             gh.write('update digest', 'PATCH', f'/repos/{gh.repo}/issues/{old["number"]}', {'body': body})
     else:
-        gh.write('create digest', 'POST', f'/repos/{gh.repo}/issues', {'title': 'Corrections digest', 'body': body, 'labels': ['digest']})
+        made = gh.write('create digest', 'POST', f'/repos/{gh.repo}/issues', {'title': 'Corrections digest', 'body': body, 'labels': ['digest']})
+        url = (made or {}).get('html_url') or url
+    notify(live, url, version, dry_run=gh.dry_run)
     return body
+
+
+# ---------- Herald ----------
+
+HERALD_TOPIC = 'titlescreen.corrections'          # something waits on a person
+HERALD_BEAT = 'titlescreen.corrections.bot'       # the bot ran (fed every run; a dead-man there watches it)
+WEEK = 7 * 86400
+DEADMAN = {'expectEvery': '7d', 'grace': '1d', 'priority': 'high'}
+
+
+def herald(topic: str, event: dict, path: str = 'pub', method: str = 'POST') -> None:
+    base = os.environ.get('HERALD_URL', 'https://herald.arinbakht.ca').rstrip('/')
+    req = urllib.request.Request(f'{base}/{path}/{topic}', method=method, data=json.dumps(event).encode(),
+                                 headers={'authorization': f'Bearer {os.environ["HERALD_TOKEN"]}',
+                                          'content-type': 'application/json', 'user-agent': 'titlescreen-corrections-bot'})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        r.read()
+
+
+def notify(groups: List[Group], digest_url: str, version: str, dry_run: bool = False) -> Optional[dict]:
+    """The heartbeat, and the notification when corrections wait to be accepted or rejected, or accepted ones
+    wait for a build. One a week while anything waits, expiring after a week: no dedupe, so a week ignored does
+    not swallow the next one."""
+    decide = [g for g in groups if 'accepted' not in g.lead.labels]
+    build = [g for g in groups if 'accepted' in g.lead.labels]
+    beat = {'title': 'Corrections review ran', 'body': f'{len(decide)} to decide, {len(build)} accepted, build {version}',
+            'priority': 'low', 'ttl': 2 * 86400}
+    event = None
+    if decide or build:
+        parts = []
+        if decide:
+            bands = [(sum(g.band == b for g in decide), t.lower()) for b, t in BANDS.items()]
+            parts.append(f'{len(decide)} to accept or reject (' + ', '.join(f'{n} {t}' for n, t in bands if n) + ')')
+        if build:
+            parts.append(f'{len(build)} accepted, waiting for tools/apply_corrections.py and a build')
+        n = len(decide) or len(build)
+        title = (f'Title Screen: {n} correction{"s" if n != 1 else ""} to review' if decide
+                 else f'Title Screen: {n} accepted correction{"s" if n != 1 else ""} to build')
+        event = {'title': title, 'body': '; '.join(parts) + '.', 'priority': 'normal', 'ttl': WEEK,
+                 'actions': [{'label': 'Open the digest', 'url': digest_url}]}
+    if dry_run or not os.environ.get('HERALD_TOKEN'):
+        print('herald (not sent):', json.dumps(beat), json.dumps(event) if event else 'no notification')
+        return event
+    # the dead-man on the heartbeat, (re)registered by the bot itself: a week and a day of silence alerts
+    herald(HERALD_BEAT, DEADMAN, path='deadman', method='PUT')
+    herald(HERALD_BEAT, beat)
+    if event:
+        herald(HERALD_TOPIC, event)
+    print('herald:', event['title'] if event else 'heartbeat only')
+    return event
 
 
 def digest(groups: List[Group], closed_now: List[str], version: str, data: Data, repo: str) -> str:

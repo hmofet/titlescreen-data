@@ -39,3 +39,4 @@ jobs:
       - run: python3 tools/corrections/review.py review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HERALD_TOKEN: ${{ secrets.HERALD_TOKEN }}
